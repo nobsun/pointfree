@@ -1,0 +1,22 @@
+cradle:
+  stack:
+    # - path: "./test/spec.hs"
+    # component: "pointfree:test:pointfree-test"
+  
+    # - path: "./test/LibSpec.hs"
+    # component: "pointfree:test:pointfree-test"
+  
+    # - path: "./test/doctests.hs"
+    # component: "pointfree:test:pointfree-doctest"
+
+    - path: "./app/Main.hs"
+    component: "pointfree:exe:pointfree"
+
+    - path: "./src/Lib.hs"
+    component: "pointfree:lib"
+
+    - path: "./src/PointFree.hs"
+    component: "pointfree:lib"
+
+    - path: "./src/Expr.hs"
+    component: "pointfree:lib"

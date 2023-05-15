@@ -1,0 +1,7 @@
+#!/bin/zsh
+
+if [ $(pgrep "script") ]; then
+  exit 0
+else
+  script -a -f -c zsh programming_session.log
+fi

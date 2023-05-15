@@ -1,0 +1,9 @@
+.stack-work/
+dist-new/
+pointfree.cabal
+*.log
+!programming_session.log
+core
+*.hi
+*.o
+*~

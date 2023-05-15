@@ -1,0 +1,17 @@
+Script started on 2023-05-12 08:06:05+09:00 [TERM="xterm-256color" TTY="/dev/pts/0" COLUMNS="205" LINES="23"]
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                             [0m[27m[24m[J[4mλ.[24m [K[178C[36mmain[39m: [4m~/devel/pointfree[24m[201D[?1h=[?2004hllghci src/PointFree.hs[1m [0m[0m [?1l>[?2004l
+GHCi, version 9.2.7: https://www.haskell.org/ghc/  :? for help
+Some flags have not been recognized: -XOverloadedRecordDots
+Loaded GHCi configuration from /home/nobsun/Dropbox/devel/pointfree/.ghci
+[1 of 1] Compiling PointFree        ( src/PointFree.hs, interpreted )
+
+[;1msrc/PointFree.hs:13:5: [;1m[31merror:[0m[0m[;1m[0m[0m[;1m parse error on input ‘|’[0m[0m
+[;1m[34m   |[0m[0m
+[;1m[34m13 |[0m[0m     [;1m[31m|[0m[0m EVarF Name
+[;1m[34m   |[0m[0m[;1m[31m     ^[0m[0m
+Failed, no modules loaded.
+2023-05-12 08:06:20.11627171
+[?1h=>>> :qE[?1l>Leaving GHCi.
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                             [0m[27m[24m[J[4mλ.[24m [K[178C[36mmain[39m: [4m~/devel/pointfree[24m[201D[?1h=[?2004heexit[?1l>[?2004l
+
+Script done on 2023-05-12 08:06:51+09:00 [COMMAND_EXIT_CODE="0"]
