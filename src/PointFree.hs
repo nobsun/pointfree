@@ -18,6 +18,11 @@ annVars = cata phi where
         ENumF _  -> Set.empty :< e
         EApF s@(us :< _) t@(ws :< _)
                  -> Set.union us ws :< EApF s t
+        ESecF _  -> Set.empty :< e
+        ESeclF l@(us :< _) o 
+                 -> us :< ESeclF l o
+        ESecrF o r@(us :< _)
+                 -> us :< ESecrF o r
 
 elimVar :: Name -> AnnExpr Vars -> AnnExpr Vars
 elimVar v ae = case ae of
@@ -35,8 +40,13 @@ elimVar v ae = case ae of
                                                    (elimVar v t)
                     | otherwise
                         -> Set.delete v vs
-                            :< EApF (Set.delete v svs :< EApF (Set.empty :< EVarF "_S") (elimVar v s))
+                            :< EApF (Set.delete v svs :< EApF (Set.empty :< EVarF "<*>") (elimVar v s))
                                     (elimVar v t)
+                ESecF _ -> error "Impossible"
+                ESeclF l o
+                        -> Set.delete v vs :< ESeclF (elimVar v l) o
+                ESecrF o r
+                        -> Set.delete v vs :< ESecrF o (elimVar v r)
 
 deAnn :: AnnExpr a -> Expr
 deAnn = ana psi where
@@ -53,6 +63,7 @@ pointfree (f, args, body) = (f, [], body') where
 
 normalize :: ScDefn -> ScDefn
 normalize (f,args,body) = (f,args,norm body)
+
 norm :: Expr -> Expr
 norm = \ case
         EAp (EVar "id") e -> norm e
@@ -62,7 +73,7 @@ norm = \ case
             _         -> case t of
                 EVar "id" -> norm s
                 _         -> EAp (EAp (EVar ".") (norm s)) (norm t)
-        EAp (EAp (EVar "_S") f) (EAp (EVar "const") x)
+        EAp (EAp (EVar "<*>") f) (EAp (EVar "const") x)
             -> EAp (EAp (EVar "flip") (norm f)) (norm x)
         EAp s t -> EAp (norm s) (norm t)
         e -> e

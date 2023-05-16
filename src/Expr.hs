@@ -2,6 +2,7 @@ module Expr where
 
 import Data.Bool
 import Data.Char
+import Data.List (nub)
 import Data.Functor.Foldable
 import Text.ParserCombinators.ReadP
 import qualified Text.PrettyPrint as PP
@@ -48,10 +49,10 @@ scDefnR = (,,) <$> varR' <*> munchR varR'
       <*  skipSpaces <* eof
 
 exprR :: ReadP Expr
-exprR = aexprR +++ expr1R
+exprR = aexprR +++ expr0R
 
 aexprR :: ReadP Expr
-aexprR = varR +++ numR +++ paren exprR
+aexprR = varR +++ numR +++ secR +++ paren exprR
 
 varR :: ReadP Expr
 varR = EVar <$> varR'
@@ -65,11 +66,14 @@ numR = ENum <$> number
 number :: ReadP Int
 number = read <$> (skipSpaces *> munch1 isDigit)
 
+secR :: ReadP Expr
+secR = paren (infixR +++ (infixR <*>))
+
 paren :: ReadP Expr -> ReadP Expr
 paren = between (skipSpaces *> char '(') (skipSpaces *> char ')')
 
-expr1R :: ReadP Expr
-expr1R = assembleOp <$> expr2R <*> expr1cR
+expr0R :: ReadP Expr
+expr0R = assembleOp <$> expr1R <*> expr0cR
 
 data PartialExpr
     = NoOp
@@ -79,6 +83,13 @@ assembleOp :: Expr -> PartialExpr -> Expr
 assembleOp e = \ case
     NoOp -> e
     FoundOp op e' -> EAp (EAp (EVar op) e) e'
+
+expr0cR :: ReadP PartialExpr
+expr0cR = (FoundOp <$> (skipSpaces *> string "$") <*> expr0R)
+        +++ emptyR NoOp
+
+expr1R :: ReadP Expr
+expr1R = assembleOp <$> expr2R <*> expr1cR
 
 expr1cR :: ReadP PartialExpr
 expr1cR = (FoundOp <$> (skipSpaces *> string "||") <*> expr1R)
@@ -98,7 +109,7 @@ expr3R :: ReadP Expr
 expr3R = skipSpaces *> (assembleOp <$> expr4R <*> expr3cR)
 
 expr3cR :: ReadP PartialExpr
-expr3cR = (FoundOp <$> relopR <*> expr4R) +++ emptyR NoOp
+expr3cR = (FoundOp <$> relopR <*> expr3R) +++ emptyR NoOp
 
 relopR :: ReadP Name
 relopR = skipSpaces *> foldr1 (+++) (map string relops)
@@ -123,14 +134,21 @@ expr5cR = (FoundOp <$> (skipSpaces *> string "*") <*> expr5R)
       +++ emptyR NoOp
 
 expr6R :: ReadP Expr
-expr6R = assembleOp <$> expr7R <*> expr6cR 
+expr6R = assembleOp <$> expr7R <*> expr6cR
 
 expr6cR :: ReadP PartialExpr
-expr6cR = (FoundOp <$> (skipSpaces *> string ".") <*> expr7R)
+expr6cR = (FoundOp <$> (skipSpaces *> munch1 (`elem` symbols')) <*> expr6R)
       +++ emptyR NoOp
 
 expr7R :: ReadP Expr
-expr7R = foldl1 EAp <$> munch1R aexprR
+expr7R = assembleOp <$> expr8R <*> expr7cR 
+
+expr7cR :: ReadP PartialExpr
+expr7cR = (FoundOp <$> (skipSpaces *> string ".") <*> expr7R)
+      +++ emptyR NoOp
+
+expr8R :: ReadP Expr
+expr8R = foldl1 EAp <$> munch1R aexprR
 
 munchR :: ReadP a -> ReadP [a]
 munchR r = munch1R r +++ emptyR []
@@ -139,7 +157,7 @@ munch1R :: ReadP a -> ReadP [a]
 munch1R r = (:) <$> r <*> munchR r
 
 instance Read Expr where
-    readsPrec _ = readP_to_S exprR
+    readsPrec _ = nub . readP_to_S exprR
 
 instance {-# Overlapping #-} Read ScDefn where
     readsPrec _ = readP_to_S scDefnR
@@ -156,9 +174,16 @@ pprExpr = \ case
             | isInfix o -> pprExpr s1 PP.<+> PP.text o 
                            PP.<+> bool (PP.parens (pprExpr t)) (pprExpr t) (isAtom t)
         _ -> pprExpr s PP.<+> bool (PP.parens (pprExpr t)) (pprExpr t) (isAtom t)
+    ESec o -> PP.parens (PP.text o)
+    ESecl e o -> PP.parens (pprExpr e PP.<+> PP.text o)
+    ESecr o e -> PP.parens (PP.text o PP.<+> pprExpr e)
 
 isInfix :: String -> Bool
-isInfix = all (`elem` ("<>=/*+-$." :: String))
+isInfix = all (`elem` symbols)
+
+symbols, symbols' :: String
+symbols = ".<>+-*/^=$&|"
+symbols' = tail symbols
 
 instance Show Expr where
     show = PP.render . pprExpr
