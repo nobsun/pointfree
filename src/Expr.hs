@@ -5,6 +5,7 @@ import Data.Char
 import Data.List (nub)
 import Data.Functor.Foldable
 import Text.ParserCombinators.ReadP
+import Text.PrettyPrint (Doc, (<+>))
 import qualified Text.PrettyPrint as PP
 
 type Name = String
@@ -42,155 +43,126 @@ instance Corecursive Expr where
 
 type ScDefn = (Name, [Name], Expr)
 
-scDefnR :: ReadP ScDefn
-scDefnR = (,,) <$> varR' <*> munchR varR'
-      <*  skipSpaces <* string "="
-      <*> exprR
-      <*  skipSpaces <* eof
-
-exprR :: ReadP Expr
-exprR = aexprR +++ expr0R
-
-aexprR :: ReadP Expr
-aexprR = varR +++ numR +++ secR +++ paren exprR
-
-varR :: ReadP Expr
-varR = EVar <$> varR'
-
-varR' :: ReadP Name
-varR' = (:) <$> (skipSpaces *> satisfy isAlpha) <*> munch isAlphaNum
-
-numR :: ReadP Expr
-numR = ENum <$> number
-
-number :: ReadP Int
-number = read <$> (skipSpaces *> munch1 isDigit)
-
-secR :: ReadP Expr
-secR = paren (infixR +++ (infixR <*>))
-
-paren :: ReadP Expr -> ReadP Expr
-paren = between (skipSpaces *> char '(') (skipSpaces *> char ')')
-
-expr0R :: ReadP Expr
-expr0R = assembleOp <$> expr1R <*> expr0cR
-
-data PartialExpr
-    = NoOp
-    | FoundOp Name Expr
-
-assembleOp :: Expr -> PartialExpr -> Expr
-assembleOp e = \ case
-    NoOp -> e
-    FoundOp op e' -> EAp (EAp (EVar op) e) e'
-
-expr0cR :: ReadP PartialExpr
-expr0cR = (FoundOp <$> (skipSpaces *> string "$") <*> expr0R)
-        +++ emptyR NoOp
-
-expr1R :: ReadP Expr
-expr1R = assembleOp <$> expr2R <*> expr1cR
-
-expr1cR :: ReadP PartialExpr
-expr1cR = (FoundOp <$> (skipSpaces *> string "||") <*> expr1R)
-        +++ emptyR NoOp
-
-emptyR :: a -> ReadP a
-emptyR a = a <$ look
-
-expr2R :: ReadP Expr
-expr2R = assembleOp <$> expr3R <*> expr2cR
-
-expr2cR :: ReadP PartialExpr
-expr2cR = (FoundOp <$> (skipSpaces *> string "&&") <*> expr2R)
-        +++ emptyR NoOp
-
-expr3R :: ReadP Expr
-expr3R = skipSpaces *> (assembleOp <$> expr4R <*> expr3cR)
-
-expr3cR :: ReadP PartialExpr
-expr3cR = (FoundOp <$> relopR <*> expr3R) +++ emptyR NoOp
-
-relopR :: ReadP Name
-relopR = skipSpaces *> foldr1 (+++) (map string relops)
-
-relops :: [Name]
-relops = ["<", "<=", "==", "/=", ">=", ">"]
-
-expr4R :: ReadP Expr
-expr4R = assembleOp <$> expr5R <*> expr4cR
-
-expr4cR :: ReadP PartialExpr
-expr4cR = (FoundOp <$> (skipSpaces *> string "+") <*> expr4R)
-      +++ (FoundOp <$> (skipSpaces *> string "-") <*> expr5R)
-      +++ emptyR NoOp
-
-expr5R :: ReadP Expr
-expr5R = assembleOp <$> expr6R <*> expr5cR
-
-expr5cR :: ReadP PartialExpr
-expr5cR = (FoundOp <$> (skipSpaces *> string "*") <*> expr5R)
-      +++ (FoundOp <$> (skipSpaces *> string "/") <*> expr6R)
-      +++ emptyR NoOp
-
-expr6R :: ReadP Expr
-expr6R = assembleOp <$> expr7R <*> expr6cR
-
-expr6cR :: ReadP PartialExpr
-expr6cR = (FoundOp <$> (skipSpaces *> munch1 (`elem` symbols')) <*> expr6R)
-      +++ emptyR NoOp
-
-expr7R :: ReadP Expr
-expr7R = assembleOp <$> expr8R <*> expr7cR 
-
-expr7cR :: ReadP PartialExpr
-expr7cR = (FoundOp <$> (skipSpaces *> string ".") <*> expr7R)
-      +++ emptyR NoOp
-
-expr8R :: ReadP Expr
-expr8R = foldl1 EAp <$> munch1R aexprR
-
-munchR :: ReadP a -> ReadP [a]
-munchR r = munch1R r +++ emptyR []
-
-munch1R :: ReadP a -> ReadP [a]
-munch1R r = (:) <$> r <*> munchR r
-
-instance Read Expr where
-    readsPrec _ = nub . readP_to_S exprR
-
 instance {-# Overlapping #-} Read ScDefn where
-    readsPrec _ = readP_to_S scDefnR
-
-pprExpr :: Expr -> PP.Doc
-pprExpr = \ case
-    EVar v -> PP.text v
-    ENum n -> PP.int n
-    EAp s t -> case s of
-        EAp (EAp (EVar o) s1) s2
-            | isInfix o -> PP.parens (pprExpr s1 PP.<+> PP.text o PP.<+> pprExpr s2)
-                           PP.<+> bool (PP.parens (pprExpr t)) (pprExpr t) (isAtom t)
-        EAp (EVar o) s1
-            | isInfix o -> pprExpr s1 PP.<+> PP.text o 
-                           PP.<+> bool (PP.parens (pprExpr t)) (pprExpr t) (isAtom t)
-        _ -> pprExpr s PP.<+> bool (PP.parens (pprExpr t)) (pprExpr t) (isAtom t)
-    ESec o -> PP.parens (PP.text o)
-    ESecl e o -> PP.parens (pprExpr e PP.<+> PP.text o)
-    ESecr o e -> PP.parens (PP.text o PP.<+> pprExpr e)
+    readsPrec _ = \ case 
+        
 
 isInfix :: String -> Bool
-isInfix = all (`elem` symbols)
+isInfix = (&&) <$> not . ("." ==) <*> all (`elem` symbols) 
 
 symbols, symbols' :: String
-symbols = ".<>+-*/^=$&|"
+symbols = ".<>=+-*/#$%^&:"
 symbols' = tail symbols
 
 instance Show Expr where
-    show = PP.render . pprExpr
+    showsPrec p = \ case
+        EVar v -> showString' v
+        ENum n -> showString' (show n)
+        EAp s t -> case s of
+            EAp (EVar o) s'
+                | isInfix o
+                    -> showParen (p > q) 
+                        ( showsPrec q' s' 
+                        . showSpace
+                        . showString' o
+                        . showSpace
+                        . showsPrec q'' t
+                        )
+                where
+                    q = prec o
+                    d = adir o
+                    (q', q'') = case d of
+                        L -> (q, succ q)
+                        I -> (succ q, succ q)
+                        R -> (succ q, q)
+            _ -> showsPrec p s . showSpace . showsPrec (succ p) t
 
-instance {-# Overlapping #-} Show ScDefn where
-    show = PP.render . pprScDefn
+showSpace :: ShowS
+showSpace = showChar ' '
 
-pprScDefn :: ScDefn -> PP.Doc
-pprScDefn (f, args, body) =
-    PP.text f PP.<+> PP.hsep (map PP.text args) PP.<+> PP.text "=" PP.<+> pprExpr body
+showString' :: String -> ShowS
+showString' = (++)
+
+data Fixity
+    = L
+    | I
+    | R
+
+prec :: String -> Int
+prec o = maybe 9 snd (lookup o tbl)
+
+adir :: String -> Fixity
+adir o = maybe L fst (lookup o tbl)
+
+tbl :: [(String, (Fixity, Int))]
+tbl = [ ("$" , (R, 0))
+          , ("||", (R, 1))
+          , ("&&", (R, 2))
+          , ("<" , (I, 3))
+          , ("<=", (I, 3))
+          , (">" , (I, 3))
+          , (">=", (I, 3))
+          , ("==", (I, 3))
+          , ("/=", (I, 3))
+          , ("+" , (L, 4))
+          , ("-" , (L, 4))
+          , ("*" , (L, 5))
+          , ("/" , (L, 5))
+          , ("^" , (R, 6))
+          , ("." , (R, 7))
+          ]
+
+-- Parser
+
+parse :: ReadP a -> ReadS a
+parse = readP_to_S
+
+token :: ReadP a -> ReadP a
+token = (skipSpaces *>)
+
+pMunch :: ReadP a -> ReadP [a]
+pMunch p = pMunch1 p <++ pure []
+
+pMunch1 :: ReadP a -> ReadP [a]
+pMunch1 p = (:) <$> p <*> pMunch p
+
+--
+
+pBop :: Name -> ReadP (Expr -> Expr -> Expr)
+pBop op = (EAp .) . (EAp . EVar) <$> (token (string op))
+
+pExpr :: ReadP Expr
+pExpr = chainr1 pExpr1 (pBop "||")
+
+pExpr1 :: ReadP Expr
+pExpr1 = chainr1 pExpr2 (pBop "&&")
+
+mkBop :: Expr -> Name -> Expr -> Expr
+mkBop e1 o e2 = EAp (EAp (EVar o) e1) e2
+
+pExpr2 :: ReadP Expr
+pExpr2 = foldl1 EAp <$> pMunch1 pAExpr
+
+pAExpr :: ReadP Expr
+pAExpr = pENum +++ pEVar +++ between (char '(') (char ')') pExpr
+
+pENum :: ReadP Expr
+pENum = token (ENum . read <$> munch1 isDigit)
+
+pEVar :: ReadP Expr
+pEVar = token (EVar <$> ((:) <$> satisfy isAlpha <*> munch isAlphaNum))
+
+test :: String
+test = "True && False && True"
+
+relops :: [String]
+relops = [ "<"
+         , "<="
+         , ">="
+         , ">"
+         , "=="
+         , "/="
+         ]
+
+instance Read Expr where
+    readsPrec _ = readP_to_S pExpr
